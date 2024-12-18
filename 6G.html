@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Good Traffic </title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f9;
+      touch-action: none;
+      transition: background-color 0.3s;
+    }
+    h1 { text-align: center; color: #333; }
+    canvas {
+      display: block;
+      margin: 10px auto;
+      border: 2px solid #333;
+      background-color: #fff;
+    }
+    .controls {
+      text-align: center;
+      margin: 10px;
+    }
+    .dot {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background-color: red;
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+    }
+    #timer, #fine, #stopwatch {
+      text-align: center;
+      font-size: 18px;
+      color: black; /* Timer and stopwatch text color set to black */
+    }
+    #fine {
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <h1>Good Traffic</h1>
+
+  <!-- Canvas -->
+  <canvas id="canvas" width="800" height="400"></canvas>
+
+  <!-- Controls -->
+  <div class="controls">
+    <label for="color">Line Color:</label>
+    <input type="color" id="color" value="#000000"> <!-- Default to black -->
+    <label for="moveDot">Move Dot:</label>
+    <input type="range" id="moveDot" min="0" max="100" value="0" step="1">
+    <button onclick="clearCanvas()">Clear Canvas</button>
+  </div>
+
+  <!-- Timer and Fine -->
+  <div id="timer">Timer: 30s</div>
+  <div id="fine">Fine: $0</div>
+  <div id="stopwatch">Stopwatch: 0s</div>
+
+  <!-- Dot -->
+  <div class="dot" id="dot"></div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const dot = document.getElementById('dot');
+    const moveDot = document.getElementById('moveDot');
+    const timerDisplay = document.getElementById('timer');
+    const fineDisplay = document.getElementById('fine');
+    const stopwatchDisplay = document.getElementById('stopwatch');
+    const colorPicker = document.getElementById('color');
+
+    let drawing = false;
+    let points = [];
+    let timer = null;
+    let stopwatch = null;
+    let timerSeconds = 30;
+    let stopwatchSeconds = 0;
+    let fineAmount = 0;
+    let fineInterval = null;
+
+    // Touch Event Listeners
+    canvas.addEventListener('touchstart', startDrawing);
+    canvas.addEventListener('touchmove', draw);
+    canvas.addEventListener('touchend', stopDrawing);
+
+    function startDrawing(e) {
+      e.preventDefault();
+      drawing = true;
+      const touch = e.touches[0];
+      addPoint(touch.clientX, touch.clientY, colorPicker.value);
+      updateDotPosition(0);
+      redraw();
+    }
+
+    function draw(e) {
+      if (!drawing) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      addPoint(touch.clientX, touch.clientY, colorPicker.value);
+      redraw();
+    }
+
+    function stopDrawing() {
+      drawing = false;
+    }
+
+    function addPoint(x, y, color) {
+      const adjustedX = x - canvas.offsetLeft;
+      const adjustedY = y - canvas.offsetTop;
+      points.push({ x: adjustedX, y: adjustedY, color });
+    }
+
+    function redraw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.lineWidth = 3;
+      for (let i = 0; i < points.length - 1; i++) {
+        ctx.strokeStyle = points[i].color;
+        ctx.beginPath();
+        ctx.moveTo(points[i].x, points[i].y);
+        ctx.lineTo(points[i + 1].x, points[i + 1].y);
+        ctx.stroke();
+      }
+    }
+
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      points = [];
+      moveDot.value = 0;
+      resetTimer();
+      resetStopwatch();
+      dot.style.left = '-20px';
+      dot.style.top = '-20px';
+      fineAmount = 0;
+      fineDisplay.innerText = "Fine: $0";
+      document.body.style.backgroundColor = "#f4f4f9"; // Reset background color
+    }
+
+    // Update Dot Position on Slider Input
+    moveDot.addEventListener('input', () => {
+      if (points.length > 0) {
+        const index = Math.floor((moveDot.value / 100) * (points.length - 1));
+        moveDotTo(points[index]);
+        checkForBlackColor(points[index]);
+      }
+    });
+
+    function moveDotTo(point) {
+      dot.style.left = `${point.x + canvas.offsetLeft}px`;
+      dot.style.top = `${point.y + canvas.offsetTop}px`;
+    }
+
+    // Check if the point is on black path
+    function checkForBlackColor(point) {
+      const imageData = ctx.getImageData(point.x, point.y, 1, 1);
+      const [r, g, b] = imageData.data;
+      if (r === 0 && g === 0 && b === 0) {
+        if (!timer) startTimer();
+      } else {
+        resetTimer();
+      }
+    }
+
+    function startTimer() {
+      timerSeconds = 30;
+      timerDisplay.innerText = `Timer: ${timerSeconds}s`;
+      timer = setInterval(() => {
+        timerSeconds--;
+        timerDisplay.innerText = `Timer: ${timerSeconds}s`;
+        if (timerSeconds <= 0) {
+          startFine();
+          resetTimer();
+        }
+      }, 1000);
+    }
+
+    function resetTimer() {
+      clearInterval(timer);
+      timer = null;
+      timerSeconds = 30;
+      timerDisplay.innerText = "Timer: 30s";
+    }
+
+    // Fine Calculation Logic
+    function startFine() {
+      fineAmount = 0;
+      fineDisplay.innerText = `Fine: $${fineAmount}`;
+      document.body.style.backgroundColor = "red"; // Red theme
+      // Trigger vibration
+      if (navigator.vibrate) {
+        navigator.vibrate(500); // Vibrate for 500ms
+      }
+      // Play notification sound
+      const audio = new Audio('https://www.soundjay.com/button/beep-07.wav');
+      audio.play();
+
+      fineInterval = setInterval(() => {
+        fineAmount += 10;
+        fineDisplay.innerText = `Fine: $${fineAmount}`;
+      }, 10000);
+
+      startStopwatch();
+    }
+
+    function startStopwatch() {
+      stopwatchSeconds = 0;
+      stopwatchDisplay.innerText = `Stopwatch: ${stopwatchSeconds}s`;
+      stopwatch = setInterval(() => {
+        stopwatchSeconds++;
+        stopwatchDisplay.innerText = `Stopwatch: ${stopwatchSeconds}s`;
+      }, 1000);
+    }
+
+    function resetStopwatch() {
+      clearInterval(stopwatch);
+      stopwatch = null;
+      stopwatchSeconds = 0;
+      stopwatchDisplay.innerText = "Stopwatch: 0s";
+    }
+
+    function stopFine() {
+      clearInterval(fineInterval);
+      fineInterval = null;
+      document.body.style.backgroundColor = "#f4f4f9"; // Reset background color
+    }
+  </script>
+<p>programmed and degined by tanvir rahman</p></body>
+</html>
